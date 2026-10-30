@@ -1,0 +1,64 @@
+# Cria no GitHub o ficheiro  .github/workflows/web.yml  e cola aqui este conteúdo.
+# A cada alteração, o GitHub compila a Aura e publica-a em https://O_TEU_UTILIZADOR.github.io/NOME_DO_REPOSITORIO/
+name: Publicar web app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Criar a pasta web (se o projeto ainda não a tiver)
+        run: |
+          if [ ! -d web ]; then
+            flutter create --platforms=web --project-name aura /tmp/webtmp
+            cp -r /tmp/webtmp/web ./web
+          fi
+
+      - name: Ícones e nome da app
+        run: |
+          if [ -d web_icones ]; then
+            mkdir -p web/icons
+            cp web_icones/Icon-*.png web/icons/
+            cp web_icones/favicon.png web/favicon.png
+          fi
+          sed -i 's/"name": "[^"]*"/"name": "Aura"/; s/"short_name": "[^"]*"/"short_name": "Aura"/; s/"background_color": "[^"]*"/"background_color": "#FFF8F1"/; s/"theme_color": "[^"]*"/"theme_color": "#FFF8F1"/' web/manifest.json
+          sed -i 's|<title>[^<]*</title>|<title>Aura</title>|' web/index.html
+
+      - run: flutter pub get
+
+      - name: Compilar
+        run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
