@@ -271,7 +271,7 @@ class _GraficoPeso extends CustomPainter {
         text: TextSpan(
             text: t,
             style: const TextStyle(fontSize: 11, color: AuraCores.texto)),
-        textDirection: TextDirection.ltr,
+       textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(o.dx - tp.width / 2, o.dy));
     }
