@@ -6,6 +6,7 @@ import '../../core/providers.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
 import 'consulta_ob_sheet.dart';
+import 'dart:ui' show TextDirection;
 
 class ObesidadePage extends ConsumerWidget {
   const ObesidadePage({super.key, required this.id});
