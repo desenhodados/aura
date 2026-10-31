@@ -8,10 +8,13 @@ import 'versao.dart';
 class AuraDrawer extends StatelessWidget {
   const AuraDrawer({super.key});
 
+  /// Fecha o drawer e navega para a rota indicada.
+  /// Usa `context.go` em vez de `router.push` para SUBSTITUIR a rota atual
+  /// e evitar empilhar a mesma página duas vezes (o que fazia parecer
+  /// que a secção "Documentos" estava duplicada em Configurações).
   void _ir(BuildContext context, String rota) {
-    final router = GoRouter.of(context);
     Navigator.of(context).pop(); // fecha o menu
-    router.push(rota);
+    context.go(rota);
   }
 
   @override
