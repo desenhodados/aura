@@ -23,16 +23,18 @@ class HomePage extends ConsumerWidget {
     return Scaffold(
       drawer: const AuraDrawer(),
       appBar: AppBar(
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            const AuraSimbolo(tamanho: 38),
-            const SizedBox(width: 8),
-            Text('Aura',
-                style: fonteTitulo.copyWith(fontSize: 26, letterSpacing: 4)),
-          ],
-        ),
-      ),
+  centerTitle: true,
+  title: Row(
+    mainAxisSize: MainAxisSize.min, // importante!
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      const AuraSimbolo(tamanho: 38),
+      const SizedBox(width: 8),
+      Text('Aura',
+          style: fonteTitulo.copyWith(fontSize: 26, letterSpacing: 4)),
+    ],
+  ),
+),
       body: Column(
         children: [
           Padding(
