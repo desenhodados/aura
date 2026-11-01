@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/painting.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/providers.dart';
 import '../../core/tema.dart';
@@ -113,7 +114,7 @@ class _EditarFotoPageState extends ConsumerState<EditarFotoPage> {
       if (mounted) Navigator.pop(context, false);
       return;
     }
-    final img = await ui.decodeImageFromList(b);
+    final img = await decodeImageFromList(b);
     if (mounted) {
       setState(() {
         _bytes = b;
