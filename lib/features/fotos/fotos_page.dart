@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -10,6 +9,7 @@ import '../../core/providers.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
 import 'editar_foto_page.dart';
+import '../../core/interacao.dart';
 
 const _angulos = [
   'Frontal',
@@ -48,61 +48,70 @@ class _FotosPageState extends ConsumerState<FotosPage>
     super.dispose();
   }
 
-  Future<void> _adicionar() async {
-    final momento = _momentoAtual; // a foto vai para a pasta que está aberta
-    final fonte = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Tirar fotografia'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+  Future<void> _adicionar() => umaVez(this, () async {
+        final momento =
+            _momentoAtual; // a foto vai para a pasta que está aberta
+        final fonte = await showModalBottomSheet<ImageSource>(
+          context: context,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: const Text('Tirar fotografia'),
+                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('Escolher da galeria'),
+                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Escolher da galeria'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (fonte == null) return;
+          ),
+        );
+        if (fonte == null) return;
 
-    // 1600 px de lado maior mantém boa qualidade e ficheiros leves (PDF também).
-    final x = await ImagePicker()
-        .pickImage(source: fonte, maxWidth: 1600, imageQuality: 85);
-    if (x == null || !mounted) return;
-    final bytes = await x.readAsBytes();
-    if (!mounted) return;
+        // 1600 px de lado maior mantém boa qualidade e ficheiros leves (PDF também).
+        final x = await ImagePicker()
+            .pickImage(source: fonte, maxWidth: 1600, imageQuality: 85);
+        if (x == null || !mounted) return;
+        final bytes = await x.readAsBytes();
+        if (!mounted) return;
 
-    final meta = await showModalBottomSheet<_Meta>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      builder: (_) => _MetaSheet(bytes: bytes, momentoInicial: momento),
-    );
-    if (meta == null) return;
+        final meta = await showModalBottomSheet<_Meta>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          builder: (_) => _MetaSheet(bytes: bytes, momentoInicial: momento),
+        );
+        if (meta == null) return;
 
-    final repo = ref.read(repoProvider);
-    final id = const Uuid().v4();
-    final chave = 'foto_$id';
-    await repo.guardarBlob(chave, bytes);
-    await repo.guardarFoto(Foto(
-      id: id,
-      pacienteId: widget.id,
-      caminho: chave,
-      angulo: meta.angulo,
-      momento: meta.momento,
-      tiradaEm: DateTime.now(),
-    ));
-    // mostra a pasta onde a foto ficou
-    if (mounted) _tab.animateTo(meta.momento == 'antes' ? 0 : 1);
-  }
+        final repo = ref.read(repoProvider);
+        final id = const Uuid().v4();
+        final chave = 'foto_$id';
+        try {
+          await repo.guardarBlob(chave, bytes);
+          await repo.guardarFoto(Foto(
+            id: id,
+            pacienteId: widget.id,
+            caminho: chave,
+            angulo: meta.angulo,
+            momento: meta.momento,
+            tiradaEm: DateTime.now(),
+          ));
+        } catch (e, st) {
+          if (mounted) {
+            await avisarErro(context,
+                'Não foi possível guardar a fotografia. Tenta de novo.', e, st);
+          }
+          return;
+        }
+        // mostra a pasta onde a foto ficou
+        if (mounted) _tab.animateTo(meta.momento == 'antes' ? 0 : 1);
+      });
 
   Future<void> _ver(Foto f) async {
     await showDialog<void>(
@@ -115,20 +124,19 @@ class _FotosPageState extends ConsumerState<FotosPage>
               IconButton(
                 tooltip: 'Editar: riscar e sublinhar',
                 icon: const Icon(Icons.draw_outlined),
-                onPressed: () async {
+                onPressed: () => umaVez('editar-${f.id}', () async {
                   final gravou = await Navigator.of(ctx).push<bool>(
-                    MaterialPageRoute(
-                        builder: (_) => EditarFotoPage(foto: f)),
+                    MaterialPageRoute(builder: (_) => EditarFotoPage(foto: f)),
                   );
                   if (gravou == true && ctx.mounted) Navigator.pop(ctx);
-                },
+                }),
               ),
               IconButton(
                 tooltip: f.momento == 'antes'
                     ? 'Mover para DEPOIS'
                     : 'Mover para ANTES',
                 icon: const Icon(Icons.swap_horiz),
-                onPressed: () async {
+                onPressed: () => umaVez('mover-${f.id}', () async {
                   await ref.read(repoProvider).guardarFoto(Foto(
                         id: f.id,
                         pacienteId: f.pacienteId,
@@ -139,11 +147,11 @@ class _FotosPageState extends ConsumerState<FotosPage>
                         tiradaEm: f.tiradaEm,
                       ));
                   if (ctx.mounted) Navigator.pop(ctx);
-                },
+                }),
               ),
               IconButton(
                 icon: const Icon(Icons.delete_outline),
-                onPressed: () async {
+                onPressed: () => umaVez('apagar-${f.id}', () async {
                   final ok = await showDialog<bool>(
                     context: ctx,
                     builder: (c2) => AlertDialog(
@@ -162,7 +170,7 @@ class _FotosPageState extends ConsumerState<FotosPage>
                   if (ok != true) return;
                   await ref.read(repoProvider).apagarFoto(f);
                   if (ctx.mounted) Navigator.pop(ctx);
-                },
+                }),
               ),
             ],
           ),
@@ -248,7 +256,7 @@ class _FotosPageState extends ConsumerState<FotosPage>
             IconButton(
               tooltip: 'Comparar',
               icon: const Icon(Icons.compare),
-              onPressed: () => context.push('/paciente/${widget.id}/comparar'),
+              onPressed: () => context.abrir('/paciente/${widget.id}/comparar'),
             ),
         ],
         bottom: TabBar(
@@ -256,8 +264,12 @@ class _FotosPageState extends ConsumerState<FotosPage>
           labelColor: AuraCores.texto,
           indicatorColor: AuraCores.rosa,
           tabs: [
-            Tab(icon: const Icon(Icons.folder_outlined), text: 'Antes (${antes.length})'),
-            Tab(icon: const Icon(Icons.folder_special_outlined), text: 'Depois (${depois.length})'),
+            Tab(
+                icon: const Icon(Icons.folder_outlined),
+                text: 'Antes (${antes.length})'),
+            Tab(
+                icon: const Icon(Icons.folder_special_outlined),
+                text: 'Depois (${depois.length})'),
           ],
         ),
       ),
@@ -279,7 +291,7 @@ class _FotosPageState extends ConsumerState<FotosPage>
                       style: FilledButton.styleFrom(
                           backgroundColor: AuraCores.rosa),
                       onPressed: () =>
-                          context.push('/paciente/${widget.id}/consent'),
+                          context.abrir('/paciente/${widget.id}/consent'),
                       child: const Text('Assinar consentimento'),
                     ),
                   ],
@@ -339,7 +351,10 @@ class _MetaSheetState extends State<_MetaSheet> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: Image.memory(widget.bytes,
-                        width: 90, height: 90, fit: BoxFit.cover, cacheWidth: 300),
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
+                        cacheWidth: 300),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -376,7 +391,8 @@ class _MetaSheetState extends State<_MetaSheet> {
                   backgroundColor: AuraCores.rosa,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                onPressed: () => Navigator.pop(context, _Meta(_angulo, _momento)),
+                onPressed: () =>
+                    Navigator.pop(context, _Meta(_angulo, _momento)),
                 child: Text('Guardar em ${_momento.toUpperCase()}'),
               ),
             ],

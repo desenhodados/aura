@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/providers.dart';
 import '../../core/tema.dart';
+import '../../core/interacao.dart';
 
 class ConfiguracoesPage extends ConsumerWidget {
   const ConfiguracoesPage({super.key});
@@ -79,13 +79,13 @@ class ConfiguracoesPage extends ConsumerWidget {
             titulo: 'Modelos de documentos',
             subtitulo:
                 'Consentimentos informados e recomendações pós-tratamento',
-            onTap: () => context.push('/modelos'),
+            onTap: () => context.abrir('/modelos'),
           ),
           _item(
             icone: Icons.draw_outlined,
             titulo: 'Assinatura da médica',
             subtitulo: 'Guardada uma vez e usada nos consentimentos',
-            onTap: () => context.push('/assinatura-medica'),
+            onTap: () => context.abrir('/assinatura-medica'),
           ),
 
           // ---------- Dados ----------
@@ -96,13 +96,13 @@ class ConfiguracoesPage extends ConsumerWidget {
             subtitulo: ultima == null
                 ? 'Guardar uma cópia numa pasta à tua escolha'
                 : 'Última cópia: ${fmt.format(ultima)}',
-            onTap: () => context.push('/copia/backup'),
+            onTap: () => context.abrir('/copia/backup'),
           ),
           _item(
             icone: Icons.settings_backup_restore_outlined,
             titulo: 'Restore',
             subtitulo: 'Repor os dados a partir de uma cópia guardada',
-            onTap: () => context.push('/copia/restore'),
+            onTap: () => context.abrir('/copia/restore'),
           ),
         ],
       ),

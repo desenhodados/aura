@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/contactos.dart';
 import '../../core/documento_pdf.dart';
@@ -11,6 +10,7 @@ import '../../core/texto_doc.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
 import '../consent/consent_texto.dart' show clinicaResponsavel;
+import '../../core/interacao.dart';
 
 /// No fim da consulta: escolhe o tratamento, ajusta o texto e envia por
 /// WhatsApp, e-mail ou PDF.
@@ -73,61 +73,63 @@ class _RecomendacoesPageState extends ConsumerState<RecomendacoesPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
   }
 
-  Future<void> _whatsApp(Paciente p) async {
-    try {
-      final ok = await abrirWhatsApp(p.telemovel, _paraWhatsApp(p));
-      if (!ok) _aviso('Não foi possível abrir o WhatsApp.');
-    } catch (_) {
-      _aviso('Não foi possível abrir o WhatsApp.');
-    }
-  }
+  Future<void> _whatsApp(Paciente p) => umaVez(this, () async {
+        try {
+          final ok = await abrirWhatsApp(p.telemovel, _paraWhatsApp(p));
+          if (!ok) _aviso('Não foi possível abrir o WhatsApp.');
+        } catch (_) {
+          _aviso('Não foi possível abrir o WhatsApp.');
+        }
+      });
 
-  Future<void> _email(Paciente p) async {
-    try {
-      final ok =
-          await abrirEmail(p.email, 'Recomendações pós-tratamento', _paraEmail(p));
-      if (!ok) _aviso('Não foi possível abrir a aplicação de e-mail.');
-    } catch (_) {
-      _aviso('Não foi possível abrir a aplicação de e-mail.');
-    }
-  }
+  Future<void> _email(Paciente p) => umaVez(this, () async {
+        try {
+          final ok = await abrirEmail(
+              p.email, 'Recomendações pós-tratamento', _paraEmail(p));
+          if (!ok) _aviso('Não foi possível abrir a aplicação de e-mail.');
+        } catch (_) {
+          _aviso('Não foi possível abrir a aplicação de e-mail.');
+        }
+      });
 
-  void _pdf(Paciente p) {
-    final hoje = DateTime.now();
-    final texto = _texto.text.trim();
-    final titulo = _tituloDoc;
-    final nome = 'Recomendacoes_${p.nome.trim().replaceAll(RegExp(r'\s+'), '_')}_'
-        '${DateFormat('yyyyMMdd').format(hoje)}.pdf';
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => Scaffold(
-        appBar: AppBar(
-          title: Text('PDF das recomendações',
-              style: fonteTitulo.copyWith(fontSize: 20)),
-        ),
-        body: PdfPartilhavel(
-          nomeFicheiro: nome,
-          assunto: 'Recomendações pós-tratamento',
-          corpo: 'Segue em anexo as recomendações pós-tratamento.',
-          aviso:
-              'Este documento refere um tratamento de saúde. Partilha apenas com a paciente e por um canal que consideres seguro.',
-          gerar: () => gerarPdfDocumento(
-            titulo: titulo,
-            texto: texto,
-            cabecalho: [
-              ('Paciente', p.nome),
-              ('Data', DateFormat('dd/MM/yyyy').format(hoje)),
-            ],
-            rodape: 'Aura · ${p.nome} · recomendações pós-tratamento',
+  Future<void> _pdf(Paciente p) => umaVez(this, () async {
+        final hoje = DateTime.now();
+        final texto = _texto.text.trim();
+        final titulo = _tituloDoc;
+        final nome =
+            'Recomendacoes_${p.nome.trim().replaceAll(RegExp(r'\s+'), '_')}_'
+            '${DateFormat('yyyyMMdd').format(hoje)}.pdf';
+        await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            appBar: AppBar(
+              title: Text('PDF das recomendações',
+                  style: fonteTitulo.copyWith(fontSize: 20)),
+            ),
+            body: PdfPartilhavel(
+              nomeFicheiro: nome,
+              assunto: 'Recomendações pós-tratamento',
+              corpo: 'Segue em anexo as recomendações pós-tratamento.',
+              aviso:
+                  'Este documento refere um tratamento de saúde. Partilha apenas com a paciente e por um canal que consideres seguro.',
+              gerar: () => gerarPdfDocumento(
+                titulo: titulo,
+                texto: texto,
+                cabecalho: [
+                  ('Paciente', p.nome),
+                  ('Data', DateFormat('dd/MM/yyyy').format(hoje)),
+                ],
+                rodape: 'Aura · ${p.nome} · recomendações pós-tratamento',
+              ),
+            ),
           ),
-        ),
-      ),
-    ));
-  }
+        ));
+      });
 
   @override
   Widget build(BuildContext context) {
     final p = ref.watch(pacienteProvider(widget.pacienteId)).valueOrNull;
-    final modelos = ref.watch(modelosProvider('recomendacao')).valueOrNull ?? [];
+    final modelos =
+        ref.watch(modelosProvider('recomendacao')).valueOrNull ?? [];
 
     return Scaffold(
       appBar: AppBar(
@@ -137,13 +139,14 @@ class _RecomendacoesPageState extends ConsumerState<RecomendacoesPage> {
           IconButton(
             tooltip: 'Editar modelos',
             icon: const Icon(Icons.description_outlined),
-            onPressed: () => context.push('/modelos'),
+            onPressed: () => context.abrir('/modelos'),
           ),
         ],
       ),
       body: p == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [
                 Text('Para: ${p.nome}',

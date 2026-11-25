@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +32,22 @@ import 'features/splash/splash_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Se uma parte do ecrã falhar, mostra uma frase simples em vez do erro técnico
+  // (a caixa cinzenta/vermelha). Em modo de desenvolvimento mantém o detalhe.
+  if (kReleaseMode) {
+    ErrorWidget.builder = (_) => const Material(
+          color: Colors.transparent,
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Não foi possível mostrar esta parte. Volta atrás e tenta de novo.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        );
+  }
   final repo = await Repositorio.abrir(await KeyStore.obterChave());
   runApp(ProviderScope(
     overrides: [repoProvider.overrideWithValue(repo)],
@@ -62,8 +79,7 @@ final _router = GoRouter(
         path: '/copia/restore',
         builder: (_, __) => const CopiaPage(modo: 'restore')),
     GoRoute(
-        path: '/configuracoes',
-        builder: (_, __) => const ConfiguracoesPage()),
+        path: '/configuracoes', builder: (_, __) => const ConfiguracoesPage()),
     GoRoute(path: '/feedback', builder: (_, __) => const FeedbackPage()),
     GoRoute(path: '/sobre', builder: (_, __) => const SobrePage()),
     GoRoute(
@@ -87,8 +103,7 @@ final _router = GoRouter(
     ),
     GoRoute(
       path: '/paciente/:id/recomendacoes',
-      builder: (_, s) =>
-          RecomendacoesPage(pacienteId: s.pathParameters['id']!),
+      builder: (_, s) => RecomendacoesPage(pacienteId: s.pathParameters['id']!),
     ),
     GoRoute(
         path: '/assinatura-medica',

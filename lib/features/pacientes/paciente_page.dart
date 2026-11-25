@@ -14,6 +14,7 @@ import '../ficha/ficha_modelo.dart';
 import '../ficha/editar_seccao_sheet.dart';
 import '../home/nova_ficha_sheet.dart';
 import 'apagar_paciente.dart';
+import '../../core/interacao.dart';
 
 /// Ficha preenchida (só leitura) + consentimento, fotografias e PDF/impressão.
 class PacientePage extends ConsumerWidget {
@@ -71,13 +72,13 @@ class PacientePage extends ConsumerWidget {
           IconButton(
             tooltip: 'Editar ficha',
             icon: const Icon(Icons.edit_outlined),
-            onPressed: () => context.push('/paciente/$id/ficha'),
+            onPressed: () => context.abrir('/paciente/$id/ficha'),
           ),
           IconButton(
             tooltip: 'PDF / Imprimir',
             icon: const Icon(Icons.picture_as_pdf_outlined),
             onPressed:
-                ficha == null ? null : () => context.push('/paciente/$id/pdf'),
+                ficha == null ? null : () => context.abrir('/paciente/$id/pdf'),
           ),
           PopupMenuButton<String>(
             tooltip: 'Mais opções',
@@ -86,7 +87,8 @@ class PacientePage extends ConsumerWidget {
                 await abrirIdentificacao(context, paciente: p);
               }
               if (v == 'apagar') {
-                final apagado = await apagarPacienteComConfirmacao(context, ref, p);
+                final apagado =
+                    await apagarPacienteComConfirmacao(context, ref, p);
                 if (apagado && context.mounted) context.pop();
               }
             },
@@ -117,7 +119,8 @@ class PacientePage extends ConsumerWidget {
         children: [
           _Cabecalho(p, podeFotografar: consent?.valido ?? false),
           _Contactos(p),
-          if (ident.isNotEmpty) _CartaoSecao('Identificação', ident,
+          if (ident.isNotEmpty)
+            _CartaoSecao('Identificação', ident,
                 aoEditar: () => abrirIdentificacao(context, paciente: p)),
 
           // Consentimento
@@ -134,7 +137,7 @@ class PacientePage extends ConsumerWidget {
               title: const Text('Consentimento de imagens'),
               subtitle: Text(estadoConsent),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/paciente/$id/consent'),
+              onTap: () => context.abrir('/paciente/$id/consent'),
             ),
           ),
           const SizedBox(height: 12),
@@ -143,7 +146,7 @@ class PacientePage extends ConsumerWidget {
           AuraCard(
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
-              onTap: () => context.push('/paciente/$id/fotos'),
+              onTap: () => context.abrir('/paciente/$id/fotos'),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -194,7 +197,7 @@ class PacientePage extends ConsumerWidget {
             subtitulo: obes.isEmpty
                 ? 'Peso, altura, IMC e notas por consulta'
                 : '${obes.length} consulta(s) · último peso ${fmtNum(obes.last.peso)} kg · IMC ${fmtNum(obes.last.imc)}',
-            aoTocar: () => context.push('/paciente/$id/obesidade'),
+            aoTocar: () => context.abrir('/paciente/$id/obesidade'),
           ),
           _CartaoAcao(
             icone: Icons.vaccines_outlined,
@@ -202,7 +205,7 @@ class PacientePage extends ConsumerWidget {
             subtitulo: trats.isEmpty
                 ? 'Realizados (lote, técnica, resultado) e próximo tratamento'
                 : '${trats.length} realizado(s) · último: ${trats.first.tratamento}',
-            aoTocar: () => context.push('/paciente/$id/tratamentos'),
+            aoTocar: () => context.abrir('/paciente/$id/tratamentos'),
           ),
           _CartaoAcao(
             icone: Icons.edit_document,
@@ -210,13 +213,13 @@ class PacientePage extends ConsumerWidget {
             subtitulo: consTrat.isEmpty
                 ? 'Um por tratamento, com assinatura'
                 : '${consTrat.length} assinado(s)',
-            aoTocar: () => context.push('/paciente/$id/consentimentos'),
+            aoTocar: () => context.abrir('/paciente/$id/consentimentos'),
           ),
           _CartaoAcao(
             icone: Icons.mark_email_read_outlined,
             titulo: 'Recomendações pós-tratamento',
             subtitulo: 'Enviar por WhatsApp, e-mail ou PDF',
-            aoTocar: () => context.push('/paciente/$id/recomendacoes'),
+            aoTocar: () => context.abrir('/paciente/$id/recomendacoes'),
           ),
           if (ficha == null)
             AuraCard(
@@ -229,7 +232,7 @@ class PacientePage extends ConsumerWidget {
                     FilledButton(
                       style: FilledButton.styleFrom(
                           backgroundColor: AuraCores.rosa),
-                      onPressed: () => context.push('/paciente/$id/ficha'),
+                      onPressed: () => context.abrir('/paciente/$id/ficha'),
                       child: const Text('Preencher ficha'),
                     ),
                   ],
@@ -248,7 +251,7 @@ class PacientePage extends ConsumerWidget {
                   for (final t in trat)
                     (rotulo: t['data'] ?? '', valor: t['tratamento'] ?? ''),
                 ],
-                aoEditar: () => context.push('/paciente/$id/tratamentos'),
+                aoEditar: () => context.abrir('/paciente/$id/tratamentos'),
               ),
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -271,7 +274,7 @@ class PacientePage extends ConsumerWidget {
                     backgroundColor: AuraCores.rosa,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  onPressed: () => context.push('/paciente/$id/pdf'),
+                  onPressed: () => context.abrir('/paciente/$id/pdf'),
                   icon: const Icon(Icons.picture_as_pdf_outlined),
                   label: const Text('Converter em PDF / Imprimir'),
                 ),
@@ -337,7 +340,6 @@ class _CartaoSecao extends StatelessWidget {
       );
 }
 
-
 /// Foto do paciente (tipo passe). Toca para tirar, escolher ou remover.
 class _Cabecalho extends ConsumerWidget {
   const _Cabecalho(this.p, {required this.podeFotografar});
@@ -363,7 +365,7 @@ class _Cabecalho extends ConsumerWidget {
         ),
       );
       if (ir == true && context.mounted) {
-        context.push('/paciente/${p.id}/consent');
+        context.abrir('/paciente/${p.id}/consent');
       }
       return;
     }
@@ -444,7 +446,6 @@ class _Cabecalho extends ConsumerWidget {
       );
 }
 
-
 class _CartaoAcao extends StatelessWidget {
   const _CartaoAcao({
     required this.icone,
@@ -472,7 +473,6 @@ class _CartaoAcao extends StatelessWidget {
       );
 }
 
-
 /// Atalhos para falar com a paciente: WhatsApp, e-mail e chamada.
 class _Contactos extends StatelessWidget {
   const _Contactos(this.p);
@@ -484,8 +484,8 @@ class _Contactos extends StatelessWidget {
       ok = await f();
     } catch (_) {}
     if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Não foi possível abrir.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível abrir.')));
     }
   }
 

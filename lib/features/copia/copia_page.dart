@@ -62,7 +62,8 @@ class _CopiaPageState extends ConsumerState<CopiaPage> {
   }
 
   // ---------- backup ----------
-  Future<void> _exportar(BuildContext botaoCtx, {required bool partilhar}) async {
+  Future<void> _exportar(BuildContext botaoCtx,
+      {required bool partilhar}) async {
     if (_pw1.text.length < 8) {
       _aviso('A palavra-passe deve ter pelo menos 8 caracteres.');
       return;
@@ -81,7 +82,8 @@ class _CopiaPageState extends ConsumerState<CopiaPage> {
       bytes = await CopiaSeguranca.cifrar(dados, _pw1.text);
     } catch (e) {
       _fecharOcupado();
-      _aviso('Erro ao criar a cópia: $e');
+      debugPrint('Aura: erro ao criar a cópia: $e');
+      _aviso('Não foi possível criar a cópia. Tenta de novo.');
       return;
     }
     _fecharOcupado();
@@ -110,7 +112,9 @@ class _CopiaPageState extends ConsumerState<CopiaPage> {
         _aviso('Backup cancelado.');
       }
     } catch (e) {
-      _aviso('Não foi possível guardar o backup: $e');
+      debugPrint('Aura: erro ao guardar o backup: $e');
+      _aviso('Não foi possível guardar o backup. '
+          'Confirma que há espaço livre e tenta de novo.');
     }
   }
 
@@ -119,6 +123,7 @@ class _CopiaPageState extends ConsumerState<CopiaPage> {
     final c = TextEditingController();
     return showDialog<String>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('Palavra-passe da cópia'),
         content: TextField(
@@ -130,7 +135,8 @@ class _CopiaPageState extends ConsumerState<CopiaPage> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, c.text),
               child: const Text('Abrir')),
@@ -166,7 +172,9 @@ class _CopiaPageState extends ConsumerState<CopiaPage> {
       return;
     } catch (e) {
       _fecharOcupado();
-      _aviso('Erro ao abrir a cópia: $e');
+      debugPrint('Aura: erro ao abrir a cópia: $e');
+      _aviso('Não foi possível abrir a cópia. Confirma que escolheste '
+          'um ficheiro .aura e que a palavra-passe está certa.');
       return;
     }
     _fecharOcupado();
@@ -184,7 +192,8 @@ class _CopiaPageState extends ConsumerState<CopiaPage> {
             '• Substituir tudo: apaga o que está agora na app e repõe a cópia.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
           OutlinedButton(
               onPressed: () => Navigator.pop(ctx, 'juntar'),
               child: const Text('Juntar')),
@@ -208,7 +217,9 @@ class _CopiaPageState extends ConsumerState<CopiaPage> {
       _aviso('Cópia restaurada.');
     } catch (e) {
       _fecharOcupado();
-      _aviso('Erro ao restaurar: $e');
+      debugPrint('Aura: erro ao restaurar: $e');
+      _aviso('Não foi possível restaurar a cópia por completo. '
+          'Tenta restaurar o mesmo ficheiro outra vez.');
     }
   }
 
@@ -300,7 +311,8 @@ class _CopiaPageState extends ConsumerState<CopiaPage> {
                             padding: const EdgeInsets.symmetric(vertical: 14)),
                         onPressed: () => _exportar(btnCtx, partilhar: true),
                         icon: const Icon(Icons.ios_share),
-                        label: const Text('Partilhar (e-mail, iCloud, AirDrop...)'),
+                        label: const Text(
+                            'Partilhar (e-mail, iCloud, AirDrop...)'),
                       ),
                     ),
                   ],

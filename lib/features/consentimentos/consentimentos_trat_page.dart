@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/providers.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
+import '../../core/interacao.dart';
 
 /// Consentimentos informados por tratamento: lista dos assinados + novo.
 class ConsentimentosTratPage extends ConsumerWidget {
@@ -19,11 +19,12 @@ class ConsentimentosTratPage extends ConsumerWidget {
       builder: (_) => const _EscolherModelo(),
     );
     if (modeloId != null && context.mounted) {
-      context.push('/paciente/$id/consentimentos/assinar/$modeloId');
+      context.abrir('/paciente/$id/consentimentos/assinar/$modeloId');
     }
   }
 
-  Future<void> _apagar(BuildContext context, WidgetRef ref, ConsentimentoTratamento c) async {
+  Future<void> _apagar(
+      BuildContext context, WidgetRef ref, ConsentimentoTratamento c) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -35,7 +36,8 @@ class ConsentimentosTratPage extends ConsumerWidget {
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
           FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+              style:
+                  FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Apagar')),
         ],
@@ -58,12 +60,14 @@ class ConsentimentosTratPage extends ConsumerWidget {
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) {
-              if (v == 'modelos') context.push('/modelos');
-              if (v == 'assinatura') context.push('/assinatura-medica');
+              if (v == 'modelos') context.abrir('/modelos');
+              if (v == 'assinatura') context.abrir('/assinatura-medica');
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'modelos', child: Text('Modelos de documentos')),
-              PopupMenuItem(value: 'assinatura', child: Text('Assinatura da médica')),
+              PopupMenuItem(
+                  value: 'modelos', child: Text('Modelos de documentos')),
+              PopupMenuItem(
+                  value: 'assinatura', child: Text('Assinatura da médica')),
             ],
           ),
         ],
@@ -77,9 +81,10 @@ class ConsentimentosTratPage extends ConsumerWidget {
               child: ListTile(
                 dense: true,
                 leading: const Icon(Icons.draw_outlined, color: AuraCores.rosa),
-                title: const Text('A assinatura da médica ainda não está guardada'),
+                title: const Text(
+                    'A assinatura da médica ainda não está guardada'),
                 trailing: TextButton(
-                  onPressed: () => context.push('/assinatura-medica'),
+                  onPressed: () => context.abrir('/assinatura-medica'),
                   child: const Text('Guardar'),
                 ),
               ),
@@ -104,7 +109,8 @@ class ConsentimentosTratPage extends ConsumerWidget {
                   subtitle: Text('Assinado em ${fmt.format(c.assinadoEm)}'),
                   trailing: PopupMenuButton<String>(
                     onSelected: (v) {
-                      if (v == 'pdf') context.push('/consentimento-trat/${c.id}/pdf');
+                      if (v == 'pdf')
+                        context.abrir('/consentimento-trat/${c.id}/pdf');
                       if (v == 'apagar') _apagar(context, ref, c);
                     },
                     itemBuilder: (_) => const [
@@ -112,11 +118,12 @@ class ConsentimentosTratPage extends ConsumerWidget {
                           value: 'pdf', child: Text('Ver / PDF / Partilhar')),
                       PopupMenuItem(
                         value: 'apagar',
-                        child: Text('Apagar', style: TextStyle(color: Colors.red)),
+                        child:
+                            Text('Apagar', style: TextStyle(color: Colors.red)),
                       ),
                     ],
                   ),
-                  onTap: () => context.push('/consentimento-trat/${c.id}/pdf'),
+                  onTap: () => context.abrir('/consentimento-trat/${c.id}/pdf'),
                 ),
               ),
             ),
@@ -137,11 +144,12 @@ class _EscolherModelo extends ConsumerWidget {
   const _EscolherModelo();
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final modelos = ref.watch(modelosProvider('consentimento')).valueOrNull ?? [];
+    final modelos =
+        ref.watch(modelosProvider('consentimento')).valueOrNull ?? [];
     return SafeArea(
       child: ConstrainedBox(
-        constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.75),
+        constraints:
+            BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.75),
         child: ListView(
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),

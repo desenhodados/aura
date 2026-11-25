@@ -5,23 +5,23 @@ import '../../core/formatos.dart';
 import '../../core/providers.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
+import '../../core/interacao.dart';
 import 'consulta_ob_sheet.dart';
 
 class ObesidadePage extends ConsumerWidget {
   const ObesidadePage({super.key, required this.id});
   final String id;
 
-  Future<void> _abrir(BuildContext context, {ConsultaObesidade? c, double? altura}) =>
-      showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        showDragHandle: true,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        builder: (_) => ConsultaObSheet(
+  Future<void> _abrir(BuildContext context,
+          {ConsultaObesidade? c, double? altura}) =>
+      abrirFolhaFormulario<void>(
+        context,
+        (_) => ConsultaObSheet(
             pacienteId: id, existente: c, alturaAnterior: altura),
       );
 
-  Future<void> _apagar(BuildContext context, WidgetRef ref, ConsultaObesidade c) async {
+  Future<void> _apagar(
+      BuildContext context, WidgetRef ref, ConsultaObesidade c) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -33,7 +33,8 @@ class ObesidadePage extends ConsumerWidget {
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
           FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+              style:
+                  FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Apagar')),
         ],
@@ -76,14 +77,16 @@ class ObesidadePage extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Última consulta · ${fmt.format(ultima!.data)}',
-                            style: const TextStyle(color: AuraCores.textoSuave)),
+                            style:
+                                const TextStyle(color: AuraCores.textoSuave)),
                         const SizedBox(height: 6),
                         Wrap(
                           spacing: 20,
                           runSpacing: 6,
                           children: [
                             _Dado('Peso', '${fmtNum(ultima.peso)} kg'),
-                            _Dado('Altura', '${fmtNum(ultima.alturaCm, casas: 0)} cm'),
+                            _Dado('Altura',
+                                '${fmtNum(ultima.alturaCm, casas: 0)} cm'),
                             _Dado('IMC', fmtNum(ultima.imc)),
                           ],
                         ),
@@ -101,7 +104,11 @@ class ObesidadePage extends ConsumerWidget {
                           SizedBox(
                             height: 140,
                             width: double.infinity,
-                            child: CustomPaint(painter: _GraficoPeso(lista)),
+                            child: CustomPaint(
+                                painter: _GraficoPeso(lista,
+                                    corTexto: context.escuro
+                                        ? AuraCores.rosaDourado
+                                        : AuraCores.texto)),
                           ),
                         ],
                       ],
@@ -145,9 +152,11 @@ class _Dado extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(rotulo,
-              style: const TextStyle(fontSize: 12, color: AuraCores.textoSuave)),
+              style:
+                  const TextStyle(fontSize: 12, color: AuraCores.textoSuave)),
           Text(valor,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              style:
+                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
         ],
       );
 }
@@ -217,7 +226,10 @@ class _CartaoConsulta extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 8, right: 12),
                     child: Text(c.notas,
-                        style: const TextStyle(color: Colors.black54)),
+                        style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant)),
                   ),
               ],
             ),
@@ -230,8 +242,9 @@ class _CartaoConsulta extends StatelessWidget {
 
 /// Evolução do peso ao longo das consultas.
 class _GraficoPeso extends CustomPainter {
-  _GraficoPeso(this.lista);
+  _GraficoPeso(this.lista, {required this.corTexto});
   final List<ConsultaObesidade> lista;
+  final Color corTexto;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -267,9 +280,8 @@ class _GraficoPeso extends CustomPainter {
 
     void texto(String t, Offset o) {
       final tp = TextPainter(
-        text: TextSpan(
-            text: t,
-            style: const TextStyle(fontSize: 11, color: AuraCores.texto)),
+        text:
+            TextSpan(text: t, style: TextStyle(fontSize: 11, color: corTexto)),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(o.dx - tp.width / 2, o.dy));
@@ -280,5 +292,6 @@ class _GraficoPeso extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_GraficoPeso old) => old.lista != lista;
+  bool shouldRepaint(_GraficoPeso old) =>
+      old.lista != lista || old.corTexto != corTexto;
 }

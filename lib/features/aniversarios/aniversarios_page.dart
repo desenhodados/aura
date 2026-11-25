@@ -8,6 +8,7 @@ import '../../core/providers.dart';
 import '../../core/texto_doc.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
+import '../../core/interacao.dart';
 
 const mensagemParabensPadrao =
     'Olá {primeiro_nome}! 🎂 Parabéns pelo seu aniversário! '
@@ -32,7 +33,8 @@ class _ParabensSheet extends ConsumerStatefulWidget {
 
 class _ParabensSheetState extends ConsumerState<_ParabensSheet> {
   late final TextEditingController _texto = TextEditingController(
-      text: ref.read(repoProvider).mensagemAniversario ?? mensagemParabensPadrao);
+      text:
+          ref.read(repoProvider).mensagemAniversario ?? mensagemParabensPadrao);
 
   @override
   void dispose() {
@@ -81,14 +83,14 @@ class _ParabensSheetState extends ConsumerState<_ParabensSheet> {
                 backgroundColor: const Color(0xFF2E9E5B),
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-              onPressed: () async {
+              onPressed: () => umaVez(this, () async {
                 try {
                   final ok = await abrirWhatsApp(p.telemovel, _final);
                   if (!ok) _aviso('Não foi possível abrir o WhatsApp.');
                 } catch (_) {
                   _aviso('Não foi possível abrir o WhatsApp.');
                 }
-              },
+              }),
               icon: const Icon(Icons.chat_outlined),
               label: const Text('Enviar por WhatsApp'),
             ),
@@ -96,14 +98,14 @@ class _ParabensSheetState extends ConsumerState<_ParabensSheet> {
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14)),
-              onPressed: () async {
+              onPressed: () => umaVez(this, () async {
                 try {
                   final ok = await abrirEmail(p.email, 'Parabéns!', _final);
                   if (!ok) _aviso('Não foi possível abrir o e-mail.');
                 } catch (_) {
                   _aviso('Não foi possível abrir o e-mail.');
                 }
-              },
+              }),
               icon: const Icon(Icons.email_outlined),
               label: const Text('Enviar por e-mail'),
             ),
@@ -180,13 +182,15 @@ class AniversariosPage extends ConsumerWidget {
                   titulo('Hoje 🎂'),
                   for (final a in hoje)
                     Padding(
-                        padding: const EdgeInsets.only(bottom: 8), child: linha(a)),
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: linha(a)),
                 ],
                 if (seguintes.isNotEmpty) ...[
                   titulo('Próximos 30 dias'),
                   for (final a in seguintes)
                     Padding(
-                        padding: const EdgeInsets.only(bottom: 8), child: linha(a)),
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: linha(a)),
                 ],
                 const SizedBox(height: 8),
                 const Text(

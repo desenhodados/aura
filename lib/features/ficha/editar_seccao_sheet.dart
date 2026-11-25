@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/interacao.dart';
 import '../../core/providers.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
@@ -10,13 +11,9 @@ import 'ficha_modelo.dart';
 /// Edita só uma secção da ficha (sem passar pelo formulário todo).
 Future<void> abrirEditorSeccao(
         BuildContext context, String pacienteId, Secao seccao) =>
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      builder: (_) => FractionallySizedBox(
+    abrirFolhaFormulario<void>(
+      context,
+      (_) => FractionallySizedBox(
         heightFactor: 0.94,
         child: _EditorSeccao(pacienteId: pacienteId, seccao: seccao),
       ),
@@ -69,6 +66,11 @@ class _EditorSeccaoState extends ConsumerState<_EditorSeccao> {
   final Map<String, dynamic> _dados = {};
   bool _carregado = false;
   bool _aGuardar = false;
+  bool _alterado = false;
+
+  void _marcarAlterado() {
+    if (!_alterado) setState(() => _alterado = true);
+  }
 
   @override
   void initState() {
@@ -86,7 +88,19 @@ class _EditorSeccaoState extends ConsumerState<_EditorSeccao> {
   }
 
   Future<void> _guardar() async {
+    if (_aGuardar) return;
     setState(() => _aGuardar = true);
+    try {
+      await _gravar();
+    } catch (e, st) {
+      if (!mounted) return;
+      setState(() => _aGuardar = false);
+      await avisarErro(context,
+          'Não foi possível guardar esta secção. Tenta de novo.', e, st);
+    }
+  }
+
+  Future<void> _gravar() async {
     final repo = ref.read(repoProvider);
     // lê a ficha mais recente e só altera os campos desta secção
     final f = await repo.lerFicha(widget.pacienteId);
@@ -112,52 +126,55 @@ class _EditorSeccaoState extends ConsumerState<_EditorSeccao> {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(widget.seccao.titulo,
-                    style: fonteTitulo.copyWith(fontSize: 24)),
+  Widget build(BuildContext context) => ProtegerSaida(
+        alterado: _alterado && !_aGuardar,
+        child: Padding(
+          padding:
+              EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                child: TituloFolha(widget.seccao.titulo),
               ),
-            ),
-            Expanded(
-              child: !_carregado
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                      children: [
-                        for (final c in widget.seccao.campos)
-                          construirCampo(context, c, _dados, setState, () {}),
-                      ],
-                    ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                child: Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancelar'),
-                    ),
-                    const Spacer(),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                          backgroundColor: AuraCores.rosa),
-                      onPressed: _carregado && !_aGuardar ? _guardar : null,
-                      child: Text(_aGuardar ? 'A guardar...' : 'Guardar'),
-                    ),
-                  ],
+              Expanded(
+                child: !_carregado
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                        children: [
+                          for (final c in widget.seccao.campos)
+                            construirCampo(
+                                context, c, _dados, setState, _marcarAlterado),
+                        ],
+                      ),
+              ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                  child: Row(
+                    children: [
+                      TextButton(
+                        // passa pela pergunta "Sair sem guardar?" se houver alterações
+                        onPressed: () => Navigator.maybePop(context),
+                        child: const Text('Cancelar'),
+                      ),
+                      const Spacer(),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                            backgroundColor: AuraCores.rosa),
+                        onPressed: _carregado && !_aGuardar ? _guardar : null,
+                        child: Text(_aGuardar ? 'A guardar...' : 'Guardar'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
 }

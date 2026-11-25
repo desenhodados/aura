@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/aura_simbolo.dart';
 import '../../core/aniversarios.dart';
@@ -12,6 +11,7 @@ import '../../data/models.dart';
 import '../aniversarios/aniversarios_page.dart';
 import '../pacientes/apagar_paciente.dart';
 import 'nova_ficha_sheet.dart';
+import '../../core/interacao.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -63,7 +63,19 @@ class HomePage extends ConsumerWidget {
           Expanded(
             child: pacientes.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Erro: $e')),
+              error: (e, _) {
+                debugPrint('Aura: erro ao carregar pacientes: $e');
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Text(
+                      'Não foi possível carregar a lista de pacientes. '
+                      'Fecha e volta a abrir a app.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              },
               data: (lista) => lista.isEmpty
                   ? const _EstadoVazio()
                   : ListView.separated(
@@ -81,14 +93,9 @@ class HomePage extends ConsumerWidget {
         backgroundColor: AuraCores.rosa,
         foregroundColor: Colors.white,
         onPressed: () async {
-          final id = await showModalBottomSheet<String>(
-            context: context,
-            isScrollControlled: true,
-            showDragHandle: true,
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            builder: (_) => const NovaFichaSheet(),
-          );
-          if (id != null && context.mounted) context.push('/paciente/$id/ficha?novo=1');
+          final id = await abrirIdentificacao(context);
+          if (id != null && context.mounted)
+            context.abrir('/paciente/$id/ficha?novo=1');
         },
         icon: const Icon(Icons.person_add_alt_1),
         label: const Text('Nova ficha'),
@@ -124,8 +131,8 @@ class _CartaoPaciente extends ConsumerWidget {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: AvatarPaciente(p, raio: 24),
-        title: Text(p.nome,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+        title:
+            Text(p.nome, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(
           detalhes.isEmpty
               ? 'Criada a ${DateFormat('dd/MM/yyyy').format(p.criadoEm)}'
@@ -136,18 +143,19 @@ class _CartaoPaciente extends ConsumerWidget {
           children: [
             Icon(
               preenchida ? Icons.check_circle : Icons.edit_note,
-              color: preenchida
-                  ? const Color(0xFF7BA37B)
-                  : AuraCores.textoSuave,
+              color:
+                  preenchida ? const Color(0xFF7BA37B) : AuraCores.textoSuave,
             ),
             PopupMenuButton<String>(
               tooltip: 'Opções',
               padding: EdgeInsets.zero,
               icon: const Icon(Icons.more_vert),
               onSelected: (v) {
-                if (v == 'editar') context.push('/paciente/${p.id}/ficha');
-                if (v == 'identificacao') abrirIdentificacao(context, paciente: p);
-                if (v == 'apagar') apagarPacienteComConfirmacao(context, ref, p);
+                if (v == 'editar') context.abrir('/paciente/${p.id}/ficha');
+                if (v == 'identificacao')
+                  abrirIdentificacao(context, paciente: p);
+                if (v == 'apagar')
+                  apagarPacienteComConfirmacao(context, ref, p);
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(
@@ -178,7 +186,7 @@ class _CartaoPaciente extends ConsumerWidget {
             ),
           ],
         ),
-        onTap: () => context.push('/paciente/${p.id}'),
+        onTap: () => context.abrir('/paciente/${p.id}'),
       ),
     );
   }
@@ -211,7 +219,6 @@ class _EstadoVazio extends StatelessWidget {
       );
 }
 
-
 /// Lembrete quando há dados e a última cópia tem mais de 7 dias (ou não existe).
 class _AvisoCopia extends ConsumerWidget {
   const _AvisoCopia();
@@ -221,7 +228,8 @@ class _AvisoCopia extends ConsumerWidget {
     final ultima = ref.watch(ultimaCopiaProvider).valueOrNull;
     final temDados =
         (ref.watch(pacientesProvider).valueOrNull ?? const []).isNotEmpty;
-    final dias = ultima == null ? null : DateTime.now().difference(ultima).inDays;
+    final dias =
+        ultima == null ? null : DateTime.now().difference(ultima).inDays;
     if (!temDados || (dias != null && dias < 7)) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -234,7 +242,7 @@ class _AvisoCopia extends ConsumerWidget {
               ? 'Ainda não fizeste cópia de segurança'
               : 'Última cópia há $dias dias'),
           trailing: TextButton(
-            onPressed: () => context.push('/copia'),
+            onPressed: () => context.abrir('/copia'),
             child: const Text('Fazer agora'),
           ),
         ),
@@ -242,7 +250,6 @@ class _AvisoCopia extends ConsumerWidget {
     );
   }
 }
-
 
 /// Aviso quando há aniversários hoje ou nos próximos 7 dias.
 class _AvisoAniversarios extends ConsumerWidget {
@@ -257,12 +264,14 @@ class _AvisoAniversarios extends ConsumerWidget {
 
     String titulo;
     if (hoje.length == 1) {
-      titulo = 'Hoje faz anos: ${hoje.first.paciente.nome} (${hoje.first.idade} anos)';
+      titulo =
+          'Hoje faz anos: ${hoje.first.paciente.nome} (${hoje.first.idade} anos)';
     } else if (hoje.length > 1) {
       titulo = 'Hoje fazem anos ${hoje.length} pacientes';
     } else {
       final a = lista.first;
-      titulo = 'Próximo aniversário: ${a.paciente.nome} · ${textoQuando(a.dias)}';
+      titulo =
+          'Próximo aniversário: ${a.paciente.nome} · ${textoQuando(a.dias)}';
     }
 
     return Padding(
@@ -279,7 +288,7 @@ class _AvisoAniversarios extends ConsumerWidget {
                   child: const Text('Parabéns'),
                 )
               : const Icon(Icons.chevron_right),
-          onTap: () => context.push('/aniversarios'),
+          onTap: () => context.abrir('/aniversarios'),
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../core/interacao.dart';
 import '../../core/providers.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
@@ -28,6 +29,19 @@ class _FichaFormPageState extends ConsumerState<FichaFormPage> {
   bool _carregado = false;
   bool _alterado = false;
   Timer? _debounce;
+  DateTime _ultimoPasso = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Muda de passo, ignorando um segundo toque imediato
+  /// (um toque duplo em "Seguinte" saltava uma secção inteira).
+  void _irPara(int passo) {
+    final agora = DateTime.now();
+    if (agora.difference(_ultimoPasso) < const Duration(milliseconds: 400)) {
+      return;
+    }
+    _ultimoPasso = agora;
+    FocusScope.of(context).unfocus();
+    setState(() => _passo = passo);
+  }
 
   int get _total => secoes.length + 1; // +1 = tratamentos propostos
 
@@ -68,16 +82,24 @@ class _FichaFormPageState extends ConsumerState<FichaFormPage> {
     super.dispose();
   }
 
-  Future<void> _concluir() async {
-    _debounce?.cancel();
-    await _guardar();
-    if (!mounted) return;
-    if (widget.novo) {
-      context.pushReplacement('/paciente/${widget.pacienteId}');
-    } else {
-      context.pop();
-    }
-  }
+  Future<void> _concluir() => umaVez(this, () async {
+        _debounce?.cancel();
+        try {
+          await _guardar();
+        } catch (e, st) {
+          if (mounted) {
+            await avisarErro(context,
+                'Não foi possível guardar a ficha. Tenta de novo.', e, st);
+          }
+          return;
+        }
+        if (!mounted) return;
+        if (widget.novo) {
+          context.pushReplacement('/paciente/${widget.pacienteId}');
+        } else {
+          context.pop();
+        }
+      });
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +121,8 @@ class _FichaFormPageState extends ConsumerState<FichaFormPage> {
                 Expanded(
                   child: ListView(
                     key: ValueKey(_passo),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                     children: _passo < secoes.length
                         ? [
@@ -122,16 +146,15 @@ class _FichaFormPageState extends ConsumerState<FichaFormPage> {
                       children: [
                         if (_passo > 0)
                           OutlinedButton(
-                            onPressed: () => setState(() => _passo--),
+                            onPressed: () => _irPara(_passo - 1),
                             child: const Text('Anterior'),
                           ),
                         const Spacer(),
                         FilledButton(
                           style: FilledButton.styleFrom(
                               backgroundColor: AuraCores.rosa),
-                          onPressed: ultimo
-                              ? _concluir
-                              : () => setState(() => _passo++),
+                          onPressed:
+                              ultimo ? _concluir : () => _irPara(_passo + 1),
                           child: Text(ultimo ? 'Concluir' : 'Seguinte'),
                         ),
                       ],
@@ -183,6 +206,8 @@ class _FichaFormPageState extends ConsumerState<FichaFormPage> {
     var data = DateTime.now();
     final ok = await showDialog<bool>(
       context: context,
+      // tocar fora não fecha: perdia-se o que estava escrito
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
           title: const Text('Tratamento proposto'),

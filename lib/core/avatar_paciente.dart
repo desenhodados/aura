@@ -35,7 +35,8 @@ class AvatarPaciente extends StatelessWidget {
       child: Text(
         _iniciais,
         style: TextStyle(
-          color: AuraCores.texto,
+          // no modo escuro o fundo do círculo é escuro: iniciais mais claras
+          color: context.escuro ? AuraCores.rosaDourado : AuraCores.texto,
           fontWeight: FontWeight.w600,
           fontSize: raio * 0.7,
         ),

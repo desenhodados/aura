@@ -26,6 +26,11 @@ Widget construirCampo(
               ? const TextInputType.numberWithOptions(decimal: true)
               : TextInputType.text,
           textCapitalization: TextCapitalization.sentences,
+          // "Seguinte" no teclado salta para o campo seguinte
+          textInputAction:
+              longo ? TextInputAction.newline : TextInputAction.next,
+          // deixa espaço por baixo do campo para não ficar colado ao teclado
+          scrollPadding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
           minLines: longo ? 2 : 1,
           maxLines: longo ? 5 : 1,
           decoration: InputDecoration(
@@ -94,8 +99,7 @@ Widget construirCampo(
                     dense: true,
                     title: Text(o),
                     trailing: sel
-                        ? const Icon(Icons.check_circle,
-                            color: AuraCores.rosa)
+                        ? const Icon(Icons.check_circle, color: AuraCores.rosa)
                         : null,
                     onTap: () {
                       setState(() {

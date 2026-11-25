@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'tema.dart';
+import 'interacao.dart';
 
 /// Pré-visualização de um PDF + botão "Partilhar" (WhatsApp, e-mail...) + imprimir.
 class PdfPartilhavel extends StatelessWidget {
@@ -21,34 +22,35 @@ class PdfPartilhavel extends StatelessWidget {
   final String corpo;
   final String aviso;
 
-  Future<void> _partilhar(BuildContext botaoCtx) async {
-    final ok = await showDialog<bool>(
-      context: botaoCtx,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Partilhar documento'),
-        content: Text(aviso),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Continuar')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    final bytes = await gerar();
-    final box = botaoCtx.findRenderObject() as RenderBox?;
-    final zona = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: nomeFicheiro,
-      subject: assunto,
-      body: corpo,
-      bounds: zona,
-    );
-  }
+  Future<void> _partilhar(BuildContext botaoCtx) => umaVez(this, () async {
+        final ok = await showDialog<bool>(
+          context: botaoCtx,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Partilhar documento'),
+            content: Text(aviso),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Continuar')),
+            ],
+          ),
+        );
+        if (ok != true) return;
+        final bytes = await gerar();
+        final box = botaoCtx.findRenderObject() as RenderBox?;
+        final zona =
+            box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: nomeFicheiro,
+          subject: assunto,
+          body: corpo,
+          bounds: zona,
+        );
+      });
 
   @override
   Widget build(BuildContext context) => Column(

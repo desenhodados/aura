@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/formatos.dart';
+import '../../core/interacao.dart';
 import '../../core/providers.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
@@ -30,6 +31,17 @@ class _ConsultaObSheetState extends ConsumerState<ConsultaObSheet> {
   late final TextEditingController _altura;
   late final TextEditingController _notas;
   late DateTime _data;
+  late final String _original;
+  bool _aGuardar = false;
+
+  String _estado() => [
+        _peso.text.trim(),
+        _altura.text.trim(),
+        _notas.text.trim(),
+        _data.toIso8601String()
+      ].join('|');
+
+  bool get _alterado => _estado() != _original;
 
   @override
   void initState() {
@@ -39,10 +51,14 @@ class _ConsultaObSheetState extends ConsumerState<ConsultaObSheet> {
     _peso = TextEditingController(text: e == null ? '' : fmtNum(e.peso));
     final alt = e?.alturaCm ?? widget.alturaAnterior;
     _altura = TextEditingController(
-        text: alt == null ? '' : fmtNum(alt, casas: alt == alt.roundToDouble() ? 0 : 1));
+        text: alt == null
+            ? ''
+            : fmtNum(alt, casas: alt == alt.roundToDouble() ? 0 : 1));
     _notas = TextEditingController(text: e?.notas ?? '');
     _peso.addListener(() => setState(() {}));
     _altura.addListener(() => setState(() {}));
+    _notas.addListener(() => setState(() {}));
+    _original = _estado();
   }
 
   @override
@@ -86,7 +102,8 @@ class _ConsultaObSheetState extends ConsumerState<ConsultaObSheet> {
 
   Future<void> _guardar() async {
     final p = _pesoKg, a = _alturaCm;
-    if (p == null || a == null) return;
+    if (p == null || a == null || _aGuardar) return;
+    setState(() => _aGuardar = true);
     final c = ConsultaObesidade(
       id: widget.existente?.id ?? const Uuid().v4(),
       pacienteId: widget.pacienteId,
@@ -95,115 +112,132 @@ class _ConsultaObSheetState extends ConsumerState<ConsultaObSheet> {
       alturaCm: a,
       notas: _notas.text.trim(),
     );
-    await ref.read(repoProvider).guardarConsultaObesidade(c);
-    if (mounted) Navigator.pop(context);
+    try {
+      await ref.read(repoProvider).guardarConsultaObesidade(c);
+      if (mounted) Navigator.pop(context);
+    } catch (e, st) {
+      if (!mounted) return;
+      setState(() => _aGuardar = false);
+      await avisarErro(context,
+          'Não foi possível guardar a consulta. Tenta de novo.', e, st);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final imc = _imc;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 0, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(widget.existente == null ? 'Nova consulta' : 'Editar consulta',
-                textAlign: TextAlign.center,
-                style: fonteTitulo.copyWith(fontSize: 24)),
-            const SizedBox(height: 16),
-            InkWell(
-              onTap: _escolherData,
-              child: InputDecorator(
+    return ProtegerSaida(
+      alterado: _alterado && !_aGuardar,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+            12, 0, 12, MediaQuery.viewInsetsOf(context).bottom + 20),
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TituloFolha(widget.existente == null
+                  ? 'Nova consulta'
+                  : 'Editar consulta'),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: _escolherData,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Data da consulta',
+                    border: OutlineInputBorder(),
+                    suffixIcon: Icon(Icons.calendar_today_outlined),
+                  ),
+                  child: Text(DateFormat('dd/MM/yyyy').format(_data)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _peso,
+                      textInputAction: TextInputAction.next,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Peso',
+                        suffixText: 'kg',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _altura,
+                      textInputAction: TextInputAction.next,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Altura',
+                        suffixText: 'cm',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              AuraCard(
+                color: context.destaque,
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calculate_outlined,
+                          color: AuraCores.rosa),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: imc == null
+                            ? const Text('IMC: indica o peso e a altura')
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('IMC ${fmtNum(imc)} kg/m²',
+                                      style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w700)),
+                                  Text(classificarImc(imc)),
+                                ],
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _notas,
+                minLines: 5,
+                maxLines: 12,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
-                  labelText: 'Data da consulta',
+                  labelText: 'Notas da consulta',
+                  alignLabelWithHint: true,
                   border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.calendar_today_outlined),
-                ),
-                child: Text(DateFormat('dd/MM/yyyy').format(_data)),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _peso,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Peso',
-                      suffixText: 'kg',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _altura,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Altura',
-                      suffixText: 'cm',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            AuraCard(
-              color: context.destaque,
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    const Icon(Icons.calculate_outlined, color: AuraCores.rosa),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: imc == null
-                          ? const Text('IMC: indica o peso e a altura')
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('IMC ${fmtNum(imc)} kg/m²',
-                                    style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w700)),
-                                Text(classificarImc(imc)),
-                              ],
-                            ),
-                    ),
-                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _notas,
-              minLines: 5,
-              maxLines: 12,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Notas da consulta',
-                alignLabelWithHint: true,
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AuraCores.rosa,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                onPressed: (_pesoKg != null && _alturaCm != null && !_aGuardar)
+                    ? _guardar
+                    : null,
+                child: Text(_aGuardar ? 'A guardar...' : 'Guardar consulta'),
               ),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AuraCores.rosa,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              onPressed: (_pesoKg != null && _alturaCm != null) ? _guardar : null,
-              child: const Text('Guardar consulta'),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

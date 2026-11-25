@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/interacao.dart';
 import '../../core/providers.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
@@ -37,14 +38,10 @@ class _FormatoCC extends TextInputFormatter {
 
 /// Abre a identificação (nova ficha, ou edição se [paciente] for dado).
 /// Devolve o id do paciente guardado.
-Future<String?> abrirIdentificacao(BuildContext context, {Paciente? paciente}) =>
-    showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      builder: (_) => NovaFichaSheet(paciente: paciente),
-    );
+Future<String?> abrirIdentificacao(BuildContext context,
+        {Paciente? paciente}) =>
+    abrirFolhaFormulario<String>(
+        context, (_) => NovaFichaSheet(paciente: paciente));
 
 /// Identificação: nome, data de nascimento, profissão, telemóvel, e-mail,
 /// nº de cartão de cidadão e nº de utente.
@@ -64,6 +61,17 @@ class _NovaFichaSheetState extends ConsumerState<NovaFichaSheet> {
   late final TextEditingController _cc;
   late final TextEditingController _utente;
   DateTime? _nascimento;
+  late final String _original;
+  bool _aGuardar = false;
+
+  /// Retrato do que está escrito, para saber se houve alterações.
+  String _estado() => [
+        for (final c in [_nome, _profissao, _telemovel, _email, _cc, _utente])
+          c.text.trim(),
+        _nascimento?.toIso8601String() ?? '',
+      ].join('|');
+
+  bool get _alterado => _estado() != _original;
 
   @override
   void initState() {
@@ -76,6 +84,7 @@ class _NovaFichaSheetState extends ConsumerState<NovaFichaSheet> {
     _cc = TextEditingController(text: p?.numeroCC ?? '');
     _utente = TextEditingController(text: p?.numeroUtente ?? '');
     _nascimento = p?.dataNascimento;
+    _original = _estado();
   }
 
   @override
@@ -104,7 +113,19 @@ class _NovaFichaSheetState extends ConsumerState<NovaFichaSheet> {
   }
 
   Future<void> _guardar() async {
-    if (!_form.currentState!.validate()) return;
+    if (_aGuardar || !_form.currentState!.validate()) return;
+    setState(() => _aGuardar = true);
+    try {
+      await _gravar();
+    } catch (e, st) {
+      if (!mounted) return;
+      setState(() => _aGuardar = false);
+      await avisarErro(context,
+          'Não foi possível guardar a identificação. Tenta de novo.', e, st);
+    }
+  }
+
+  Future<void> _gravar() async {
     final repo = ref.read(repoProvider);
     final existente = widget.paciente;
     final Paciente p;
@@ -139,103 +160,112 @@ class _NovaFichaSheetState extends ConsumerState<NovaFichaSheet> {
   Widget build(BuildContext context) {
     final editar = widget.paciente != null;
     const espaco = SizedBox(height: 12);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 0, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
-      child: SingleChildScrollView(
-        child: Form(
-          key: _form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(editar ? 'Editar identificação' : 'Nova ficha',
-                  style: fonteTitulo.copyWith(fontSize: 24),
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 4),
-              const Text('Identificação',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AuraCores.textoSuave)),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _nome,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                    labelText: 'Nome', border: OutlineInputBorder()),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Indica o nome' : null,
-              ),
-              espaco,
-              InkWell(
-                onTap: _escolherData,
-                child: InputDecorator(
+    return ProtegerSaida(
+      alterado: _alterado && !_aGuardar,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+            12, 0, 12, MediaQuery.viewInsetsOf(context).bottom + 20),
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Form(
+            key: _form,
+            onChanged: () => setState(() {}),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TituloFolha(editar ? 'Editar identificação' : 'Nova ficha',
+                    subtitulo: 'Identificação'),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _nome,
+                  textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
-                      labelText: 'Data de nascimento',
-                      border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_today_outlined)),
-                  child: Text(_nascimento == null
-                      ? 'Selecionar'
-                      : DateFormat('dd/MM/yyyy').format(_nascimento!)),
+                      labelText: 'Nome', border: OutlineInputBorder()),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Indica o nome' : null,
                 ),
-              ),
-              espaco,
-              TextFormField(
-                controller: _cc,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [_FormatoCC()],
-                decoration: const InputDecoration(
-                  labelText: 'Nº do Cartão de Cidadão',
-                  hintText: '11111111 1 ZX1',
-                  helperText: 'Dígitos, dígito de controlo e letras: 11111111 1 ZX1',
-                  border: OutlineInputBorder(),
+                espaco,
+                InkWell(
+                  onTap: _escolherData,
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                        labelText: 'Data de nascimento',
+                        border: OutlineInputBorder(),
+                        suffixIcon: Icon(Icons.calendar_today_outlined)),
+                    child: Text(_nascimento == null
+                        ? 'Selecionar'
+                        : DateFormat('dd/MM/yyyy').format(_nascimento!)),
+                  ),
                 ),
-                validator: (v) {
-                  final s = (v ?? '').trim();
-                  if (s.isEmpty) return null;
-                  return normalizarCC(s) == null
-                      ? 'Formato: 11111111 1 ZX1'
-                      : null;
-                },
-              ),
-              espaco,
-              TextFormField(
-                controller: _utente,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                    labelText: 'Nº de utente (SNS)',
-                    border: OutlineInputBorder()),
-              ),
-              espaco,
-              TextFormField(
-                controller: _profissao,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                    labelText: 'Profissão', border: OutlineInputBorder()),
-              ),
-              espaco,
-              TextFormField(
-                controller: _telemovel,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                    labelText: 'Telemóvel', border: OutlineInputBorder()),
-              ),
-              espaco,
-              TextFormField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                    labelText: 'E-mail', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 20),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: AuraCores.rosa,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                espaco,
+                TextFormField(
+                  controller: _cc,
+                  textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [_FormatoCC()],
+                  decoration: const InputDecoration(
+                    labelText: 'Nº do Cartão de Cidadão',
+                    hintText: '11111111 1 ZX1',
+                    helperText:
+                        'Dígitos, dígito de controlo e letras: 11111111 1 ZX1',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) {
+                    final s = (v ?? '').trim();
+                    if (s.isEmpty) return null;
+                    return normalizarCC(s) == null
+                        ? 'Formato: 11111111 1 ZX1'
+                        : null;
+                  },
                 ),
-                onPressed: _guardar,
-                child: Text(editar ? 'Guardar' : 'Criar ficha'),
-              ),
-            ],
+                espaco,
+                TextFormField(
+                  controller: _utente,
+                  textInputAction: TextInputAction.next,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                      labelText: 'Nº de utente (SNS)',
+                      border: OutlineInputBorder()),
+                ),
+                espaco,
+                TextFormField(
+                  controller: _profissao,
+                  textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                      labelText: 'Profissão', border: OutlineInputBorder()),
+                ),
+                espaco,
+                TextFormField(
+                  controller: _telemovel,
+                  textInputAction: TextInputAction.next,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                      labelText: 'Telemóvel', border: OutlineInputBorder()),
+                ),
+                espaco,
+                TextFormField(
+                  controller: _email,
+                  textInputAction: TextInputAction.done,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                      labelText: 'E-mail', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AuraCores.rosa,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  onPressed: _aGuardar ? null : _guardar,
+                  child: Text(_aGuardar
+                      ? 'A guardar...'
+                      : (editar ? 'Guardar' : 'Criar ficha')),
+                ),
+              ],
+            ),
           ),
         ),
       ),

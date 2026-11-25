@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/documento_pdf.dart';
 import '../../core/imagem_blob.dart';
 import '../../core/pdf_partilhavel.dart';
+import '../../core/interacao.dart';
 import '../../core/providers.dart';
 import '../../core/tema.dart';
 import '../../data/models.dart';
@@ -28,6 +29,8 @@ class TratamentosPage extends ConsumerWidget {
     }
     final ok = await showDialog<bool>(
       context: context,
+      // tocar fora não fecha: perdia-se o que estava escrito
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
           title: const Text('Próximo tratamento'),
@@ -85,8 +88,8 @@ class TratamentosPage extends ConsumerWidget {
     }
   }
 
-  Future<void> _marcarRealizado(BuildContext context, WidgetRef ref,
-      Paciente p, int i, Map<String, String> prop) async {
+  Future<void> _marcarRealizado(BuildContext context, WidgetRef ref, Paciente p,
+      int i, Map<String, String> prop) async {
     DateTime? d;
     try {
       d = DateFormat('dd/MM/yyyy').parseStrict(prop['data'] ?? '');
@@ -129,8 +132,8 @@ class TratamentosPage extends ConsumerWidget {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: AuraCard(
                       child: ListTile(
-                        leading:
-                            const Icon(Icons.event_outlined, color: AuraCores.rosa),
+                        leading: const Icon(Icons.event_outlined,
+                            color: AuraCores.rosa),
                         title: Text(propostos[i]['tratamento'] ?? ''),
                         subtitle: Text(propostos[i]['data'] ?? ''),
                         trailing: PopupMenuButton<String>(
@@ -148,11 +151,13 @@ class TratamentosPage extends ConsumerWidget {
                             }
                           },
                           itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'editar', child: Text('Editar')),
+                            PopupMenuItem(
+                                value: 'editar', child: Text('Editar')),
                             PopupMenuItem(
                                 value: 'feito',
                                 child: Text('Marcar como realizado')),
-                            PopupMenuItem(value: 'apagar', child: Text('Apagar')),
+                            PopupMenuItem(
+                                value: 'apagar', child: Text('Apagar')),
                           ],
                         ),
                       ),
@@ -292,7 +297,8 @@ class _CartaoTratamento extends ConsumerWidget {
                         context: context,
                         builder: (ctx) => AlertDialog(
                           title: const Text('Apagar este tratamento?'),
-                          content: const Text('Esta ação não pode ser desfeita.'),
+                          content:
+                              const Text('Esta ação não pode ser desfeita.'),
                           actions: [
                             TextButton(
                                 onPressed: () => Navigator.pop(ctx, false),
@@ -333,12 +339,9 @@ Future<bool?> abrirTratamentoSheet(
   String? tratamentoInicial,
   DateTime? dataInicial,
 }) =>
-    showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      builder: (_) => _TratamentoSheet(
+    abrirFolhaFormulario<bool>(
+      context,
+      (_) => _TratamentoSheet(
         pacienteId: pacienteId,
         existente: existente,
         tratamentoInicial: tratamentoInicial,
@@ -376,6 +379,32 @@ class _TratamentoSheetState extends ConsumerState<_TratamentoSheet> {
   Uint8List? _novoRotulo;
   bool _removerRotulo = false;
   bool _aGuardar = false;
+  late final String _original;
+
+  List<TextEditingController> get _campos =>
+      [_tratamento, _material, _lote, _tecnica, _resultado];
+
+  String _estado() => [
+        for (final c in _campos) c.text.trim(),
+        _data.toIso8601String(),
+        '$_removerRotulo',
+        '${_novoRotulo?.length}',
+      ].join('|');
+
+  bool get _alterado => _estado() != _original;
+
+  @override
+  void initState() {
+    super.initState();
+    _original = _estado();
+    for (final c in _campos) {
+      c.addListener(_atualizar);
+    }
+  }
+
+  void _atualizar() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
@@ -425,7 +454,19 @@ class _TratamentoSheetState extends ConsumerState<_TratamentoSheet> {
           const SnackBar(content: Text('Indica o tratamento realizado.')));
       return;
     }
+    if (_aGuardar) return;
     setState(() => _aGuardar = true);
+    try {
+      await _gravar();
+    } catch (e, st) {
+      if (!mounted) return;
+      setState(() => _aGuardar = false);
+      await avisarErro(context,
+          'Não foi possível guardar o tratamento. Tenta de novo.', e, st);
+    }
+  }
+
+  Future<void> _gravar() async {
     final repo = ref.read(repoProvider);
     String? chave = widget.existente?.rotuloFoto;
     if (_removerRotulo && chave != null) {
@@ -453,146 +494,156 @@ class _TratamentoSheetState extends ConsumerState<_TratamentoSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final modelos = ref.watch(modelosProvider('consentimento')).valueOrNull ?? [];
+    final modelos =
+        ref.watch(modelosProvider('consentimento')).valueOrNull ?? [];
     final rotuloAtual = widget.existente?.rotuloFoto;
     const espaco = SizedBox(height: 12);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 0, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-                widget.existente == null
-                    ? 'Tratamento realizado'
-                    : 'Editar tratamento',
-                style: fonteTitulo.copyWith(fontSize: 24),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 14),
-            InkWell(
-              onTap: () async {
-                final d = await showDatePicker(
-                  context: context,
-                  initialDate: _data,
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime(2100),
-                  locale: const Locale('pt', 'PT'),
-                );
-                if (d != null) setState(() => _data = d);
-              },
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                    labelText: 'Data',
-                    border: OutlineInputBorder(),
-                    suffixIcon: Icon(Icons.calendar_today_outlined)),
-                child: Text(DateFormat('dd/MM/yyyy').format(_data)),
+    return ProtegerSaida(
+      alterado: _alterado && !_aGuardar,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+            12, 0, 12, MediaQuery.viewInsetsOf(context).bottom + 20),
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TituloFolha(widget.existente == null
+                  ? 'Tratamento realizado'
+                  : 'Editar tratamento'),
+              const SizedBox(height: 14),
+              InkWell(
+                onTap: () async {
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: _data,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                    locale: const Locale('pt', 'PT'),
+                  );
+                  if (d != null) setState(() => _data = d);
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                      labelText: 'Data',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today_outlined)),
+                  child: Text(DateFormat('dd/MM/yyyy').format(_data)),
+                ),
               ),
-            ),
-            espaco,
-            TextField(
-              controller: _tratamento,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                  labelText: 'Tratamento', border: OutlineInputBorder()),
-            ),
-            if (modelos.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 0,
+              espaco,
+              TextField(
+                controller: _tratamento,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                    labelText: 'Tratamento', border: OutlineInputBorder()),
+              ),
+              if (modelos.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 0,
+                  children: [
+                    for (final m in modelos)
+                      ActionChip(
+                        label: Text(m.titulo,
+                            style: const TextStyle(fontSize: 12)),
+                        onPressed: () =>
+                            setState(() => _tratamento.text = m.titulo),
+                      ),
+                  ],
+                ),
+              ],
+              espaco,
+              TextField(
+                controller: _material,
+                textInputAction: TextInputAction.next,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                    labelText: 'Tipo de material / produto',
+                    border: OutlineInputBorder()),
+              ),
+              espaco,
+              TextField(
+                controller: _lote,
+                textInputAction: TextInputAction.next,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                    labelText: 'Lote', border: OutlineInputBorder()),
+              ),
+              espaco,
+              TextField(
+                controller: _tecnica,
+                textInputAction: TextInputAction.next,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                    labelText: 'Técnica', border: OutlineInputBorder()),
+              ),
+              espaco,
+              TextField(
+                controller: _resultado,
+                minLines: 2,
+                maxLines: 5,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                    labelText: 'Resultado',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder()),
+              ),
+              espaco,
+              Row(
                 children: [
-                  for (final m in modelos)
-                    ActionChip(
-                      label: Text(m.titulo, style: const TextStyle(fontSize: 12)),
-                      onPressed: () =>
-                          setState(() => _tratamento.text = m.titulo),
+                  if (_novoRotulo != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(_novoRotulo!,
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          cacheWidth: 200),
+                    )
+                  else if (rotuloAtual != null && !_removerRotulo)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: ImagemBlob(rotuloAtual,
+                          largura: 64, altura: 64, cacheWidth: 200),
+                    ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _escolherRotulo,
+                      icon: const Icon(Icons.qr_code_scanner_outlined),
+                      label: Text(_novoRotulo != null ||
+                              (rotuloAtual != null && !_removerRotulo)
+                          ? 'Trocar foto do rótulo'
+                          : 'Foto do rótulo do produto'),
+                    ),
+                  ),
+                  if (_novoRotulo != null ||
+                      (rotuloAtual != null && !_removerRotulo))
+                    IconButton(
+                      tooltip: 'Remover foto',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => setState(() {
+                        _novoRotulo = null;
+                        _removerRotulo = true;
+                      }),
                     ),
                 ],
               ),
-            ],
-            espaco,
-            TextField(
-              controller: _material,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                  labelText: 'Tipo de material / produto',
-                  border: OutlineInputBorder()),
-            ),
-            espaco,
-            TextField(
-              controller: _lote,
-              textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(
-                  labelText: 'Lote', border: OutlineInputBorder()),
-            ),
-            espaco,
-            TextField(
-              controller: _tecnica,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                  labelText: 'Técnica', border: OutlineInputBorder()),
-            ),
-            espaco,
-            TextField(
-              controller: _resultado,
-              minLines: 2,
-              maxLines: 5,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                  labelText: 'Resultado',
-                  alignLabelWithHint: true,
-                  border: OutlineInputBorder()),
-            ),
-            espaco,
-            Row(
-              children: [
-                if (_novoRotulo != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(_novoRotulo!,
-                        width: 64, height: 64, fit: BoxFit.cover, cacheWidth: 200),
-                  )
-                else if (rotuloAtual != null && !_removerRotulo)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: ImagemBlob(rotuloAtual,
-                        largura: 64, altura: 64, cacheWidth: 200),
-                  ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _escolherRotulo,
-                    icon: const Icon(Icons.qr_code_scanner_outlined),
-                    label: Text(_novoRotulo != null ||
-                            (rotuloAtual != null && !_removerRotulo)
-                        ? 'Trocar foto do rótulo'
-                        : 'Foto do rótulo do produto'),
-                  ),
+              const SizedBox(height: 18),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AuraCores.rosa,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                if (_novoRotulo != null ||
-                    (rotuloAtual != null && !_removerRotulo))
-                  IconButton(
-                    tooltip: 'Remover foto',
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => setState(() {
-                      _novoRotulo = null;
-                      _removerRotulo = true;
-                    }),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AuraCores.rosa,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                onPressed: _aGuardar ? null : _guardar,
+                child: Text(_aGuardar ? 'A guardar...' : 'Guardar'),
               ),
-              onPressed: _aGuardar ? null : _guardar,
-              child: Text(_aGuardar ? 'A guardar...' : 'Guardar'),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
